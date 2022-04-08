@@ -1,12 +1,8 @@
-import argparse
 import os
-import sys
-sys.path.insert(0, './yolov5face')
+import argparse
 
 import cv2
 import time
-import copy
-import torch
 import onnxruntime
 import numpy as np
 from loguru import logger
@@ -16,10 +12,6 @@ from yolox.utils import mkdir, multiclass_nms, demo_postprocess
 from yolox.utils.visualize import plot_tracking
 from yolox.tracker.byte_tracker import BYTETracker
 from yolox.tracking_utils.timer import Timer
-
-from yolov5face.models.experimental import attempt_load
-from yolov5face.utils.datasets import letterbox
-from yolov5face.utils.general import check_img_size, non_max_suppression_face, scale_coords, scale_coords_landmarks, xyxy2xywh
 
 def make_parser():
     parser = argparse.ArgumentParser("onnxruntime inference sample")
@@ -78,28 +70,6 @@ def make_parser():
     parser.add_argument("--mot20", dest="mot20", default=False, action="store_true", help="test mot20.")
     return parser
 
-def show_results(img, xywh, conf, landmarks):
-    h,w,c = img.shape
-    # tl = 1 or round(0.002 * (h + w) / 2) + 1  # line/font thickness
-    tl = 3
-    x1 = int(xywh[0] * w - 0.5 * xywh[2] * w)
-    y1 = int(xywh[1] * h - 0.5 * xywh[3] * h)
-    x2 = int(xywh[0] * w + 0.5 * xywh[2] * w)
-    y2 = int(xywh[1] * h + 0.5 * xywh[3] * h)
-    cv2.rectangle(img, (x1,y1), (x2, y2), (0,255,0), thickness=tl, lineType=cv2.LINE_AA)
-
-    clors = [(255,0,0),(0,255,0),(0,0,255),(255,255,0),(0,255,255)]
-
-    for i in range(5):
-        point_x = int(landmarks[2 * i] * w)
-        point_y = int(landmarks[2 * i + 1] * h)
-        cv2.circle(img, (point_x, point_y), tl+1, clors[i], -1)
-
-    tf = max(tl - 1, 1)  # font thickness
-    label = str(conf)[:5]
-    cv2.putText(img, label, (x1, y1 - 2), 0, tl / 3, [225, 255, 255], thickness=tf, lineType=cv2.LINE_AA)
-    return img
-
 class Predictor(object):
     def __init__(self, args):
         self.rgb_means = (0.485, 0.456, 0.406)
@@ -156,13 +126,6 @@ def imageflow_demo(predictor, args):
 
     tracker = BYTETracker(args, frame_rate=30)
 
-    weights = "./yolov5face/models/yolov5s-face.pt"
-    # # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = "cpu"
-    img_size = 320
-    model = attempt_load(weights, map_location=device)
-    stride = int(model.stride.max())
-
     frame_id = 0
     fps = 0
     fps_process = 0
@@ -177,8 +140,6 @@ def imageflow_demo(predictor, args):
     
     while True:
         # print("\nFrame ID: ", frame_id)
-        # if frame_id % 20 == 0:
-        #     logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
         start_time = time.time()
         ret_val, frame = cap.read()
 
@@ -186,15 +147,11 @@ def imageflow_demo(predictor, args):
             # resize frame to enhance processing speed (interpolation NEAREST is the fastest in cv2 interpolation)
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
 
-            # YOLOv5 copy original image
-            img0 = copy.deepcopy(frame)
-
             # Skip frames
             if frame_id % args.skip_frames == 0:
                 outputs, img_info = predictor.inference(frame)
                 if outputs is not None:
                     online_targets, previous_targets = tracker.update(outputs, [img_info['height'], img_info['width']], [img_info['height'], img_info['width']])
-                    # print('{0:<50} {1:<50}'.format("Current: "+str(online_targets), "Previous: "+str(previous_targets)))
                     online_tlwhs = []
                     online_ids = []
                     online_scores = []
@@ -209,13 +166,13 @@ def imageflow_demo(predictor, args):
                         else:
                             print("**************ALERT FOR TO ANH NOW*****************")
                     # results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
+
                     # calculate number of deteting and tracking frame per second 
                     fps_process = 1 / (time.time() - start_time)
 
                     dif = list(set(online_ids).symmetric_difference(set(previous_ids)))
                     if len(dif) > 0:
                         for x in reversed(dif):
-                            # print(previous_ids.index(x))
                             del previous_tlwhs[previous_ids.index(x)]
                             del previous_ids[previous_ids.index(x)]
                     online_im = plot_tracking(
@@ -235,46 +192,16 @@ def imageflow_demo(predictor, args):
                 else:
                     online_im = img_info['raw_img']
 
-                # YOLOv5Face
-                r = img_size / max(width, height)  # resize image to img_size
-                if r != 1:  # always resize down, only resize up if training with augmentation
-                    interp = cv2.INTER_AREA if r < 1  else cv2.INTER_LINEAR
-                img0 = cv2.resize(img0, (int(width * r), int(height * r)), interpolation=interp)
-                # Face Detector
-                imgsz = check_img_size(img_size, s=stride)  # check img_size
-                img = letterbox(img0, new_shape=imgsz)[0]
-                img = torch.from_numpy(img).to(device).permute(2, 0, 1)
-                img = img.float()  # uint8 to fp16/32
-                img /= 255.0  # 0 - 255 to 0.0 - 1.0
-                if img.ndimension() == 3:
-                    img = img.unsqueeze(0)
-                # Inference
-                pred = model(img)[0]
-                # Apply NMS
-                pred = non_max_suppression_face(pred, 0.75, 0.5)
-                # Process detections
-                for det in pred:  # detections per image
-                    gn = torch.tensor(frame.shape)[[1, 0, 1, 0]].to(device)  # normalization gain whwh
-                    gn_lks = torch.tensor(frame.shape)[[1, 0, 1, 0, 1, 0, 1, 0, 1, 0]].to(device)  # normalization gain landmarks
-                    if len(det):
-                        # Rescale boxes from img_size to im0 size
-                        det[:, :4] = scale_coords(img.shape[2:], det[:, :4], frame.shape).round()
-                        det[:, 5:15] = scale_coords_landmarks(img.shape[2:], det[:, 5:15], frame.shape).round()
-
-                        for j in range(det.size()[0]):
-                            xywh = (xyxy2xywh(det[j, :4].view(1, 4)) / gn).view(-1).tolist()
-                            conf = det[j, 4].cpu().numpy()
-                            landmarks = (det[j, 5:15].view(1, 10) / gn_lks).view(-1).tolist()
-                            online_im = show_results(online_im, xywh, conf, landmarks)
-
                 # calculate number of frame per "int(skip_frames)" seconds
                 fps = args.skip_frames / (time.time() - start_time)
 
             else:
                 online_im = plot_tracking(
                         frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)   
+
             # show stream window
             cv2.imshow("Video", online_im)
+            
             # save video stream with format mp4
             vid_writer.write(online_im)
             
