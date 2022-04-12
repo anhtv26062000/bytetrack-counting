@@ -66,7 +66,7 @@ def make_parser():
         help="Whether your model uses p6 in FPN/PAN.",
     )
     # tracking args
-    parser.add_argument("--skip_frames", type=int, default=10, help="number frames for skipping")
+    parser.add_argument("--skip_frames", type=int, default=12, help="number frames for skipping")
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
     parser.add_argument("--match_thresh", type=float, default=0.85, help="matching threshold for tracking")
@@ -159,11 +159,9 @@ def imageflow_demo(predictor, args):
     tracker = BYTETracker(args, frame_rate=30)
 
     # =============ultra light weight face detection load model=========================
-    label_path = "./pretrained/voc-model-labels.txt"
     onnx_path = "./pretrained/onnx/version-RFB-320.onnx"
-    class_names = [name.strip() for name in open(label_path).readlines()]
 
-    threshold = 0.9
+    threshold = 0.8
 
     predictor_face = onnx.load(onnx_path)
     onnx.checker.check_model(predictor_face)
@@ -191,16 +189,25 @@ def imageflow_demo(predictor, args):
         ret_val, frame = cap.read()
 
         if ret_val:
+            t1 = time.time()
             # resize frame to enhance processing speed (interpolation NEAREST is the fastest in cv2 interpolation)
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
+            t2 = time.time()
 
-            # copy image
+            # preprocess face detection
             img_face = copy.deepcopy(frame)
             img_face = cv2.resize(img_face, (320, 240))
+            image_mean = np.array([127, 127, 127])
+            img_face = (img_face - image_mean) / 128
+            img_face = np.transpose(img_face, [2, 0, 1])
+            img_face = np.expand_dims(img_face, axis=0)
+            img_face = img_face.astype(np.float32)
+            t3 = time.time()
 
             # Skip frames
             if frame_id % args.skip_frames == 0:
                 outputs, img_info = predictor.inference(frame)
+                t4 = time.time()
                 if outputs is not None:
                     online_targets, previous_targets = tracker.update(outputs, [img_info['height'], img_info['width']], [img_info['height'], img_info['width']])
                     online_tlwhs = []
@@ -226,6 +233,7 @@ def imageflow_demo(predictor, args):
                         for x in reversed(dif):
                             del previous_tlwhs[previous_ids.index(x)]
                             del previous_ids[previous_ids.index(x)]
+                    t5 = time.time()
                     online_im = plot_tracking(
                         img_info['raw_img'], online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)
 
@@ -240,17 +248,15 @@ def imageflow_demo(predictor, args):
                             previous_ids.append(pre_tid)
                         else:
                             print("**************ALERT FOR TO ANH NOW*****************")
+                    t6 = time.time()
                 else:
                     online_im = img_info['raw_img']
 
-                # Ultra-lightweight Detection
-                image_mean = np.array([127, 127, 127])
-                img_face = (img_face - image_mean) / 128
-                img_face = np.transpose(img_face, [2, 0, 1])
-                img_face = np.expand_dims(img_face, axis=0)
-                img_face = img_face.astype(np.float32)
+                # Ultra-lightweight Face Detection
                 confidences, boxes = ort_session.run(None, {input_name: img_face})
                 boxes, labels, probs = predict(width, height, confidences, boxes, threshold)
+                t7 = time.time()
+                print(f'Speed: %.5fms resize_MOT, %.5fms pre-process face-det, %.5fms body-det, %.5fms tracking, %.5fms store-state, %.5fms face-det' % (t2-t1, t3-t2, t4-t3, t5-t4, t6-t5, t7-t6))
                 for i in range(boxes.shape[0]):
                     box = boxes[i, :]
                     cv2.rectangle(online_im, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 4)
