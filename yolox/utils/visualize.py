@@ -16,7 +16,7 @@ def get_color(idx):
     return color
 
 
-def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps_pro=0, fps=0., ids2=None):
+def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps_pro=0, fps=0., ids2=None, no_sum= False):
     im = np.ascontiguousarray(np.copy(image))
     im_h, im_w = im.shape[:2]
 
@@ -50,7 +50,7 @@ def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps
         pre_center = (x2 + (w2/2), y2 + (h2/2))
         
         # counting person enter and exit
-        if intersect(cur_center, pre_center, line[0], line[1]):
+        if no_sum == False and intersect(cur_center, pre_center, line[0], line[1]):
             if horizontal_True_vertical_False:
                 if cur_center[1] < pre_center[1]:  
                     counter['up'] += 1  
@@ -76,18 +76,18 @@ def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps
         cv2.line(im, cur, pre, color=(0, 0 ,255), thickness=line_thickness, lineType=cv2.LINE_AA)
         intbox = tuple(map(int, (x1, y1, x1 + w, y1 + h)))
 
-        # obj_id = int(obj_ids[i])
-        # id_text = '{}'.format(int(obj_id))
-        # if ids2 is not None:
-        #     id_text = id_text + ', {}'.format(int(ids2[i]))
-        # (text_width, text_height), _ = cv2.getTextSize(id_text, cv2.FONT_HERSHEY_DUPLEX, 1, 1)  
+        obj_id = int(obj_ids[i])
+        id_text = '{}'.format(int(obj_id))
+        if ids2 is not None:
+            id_text = id_text + ', {}'.format(int(ids2[i]))
+        (text_width, text_height), _ = cv2.getTextSize(id_text, cv2.FONT_HERSHEY_DUPLEX, 1, 1)  
 
-        # # draw bboxes
-        # color = get_color(abs(obj_id))
-        # cv2.rectangle(im, intbox[0:2], intbox[2:4], color=color, thickness=line_thickness)
-        # cv2.rectangle(im, (intbox[0], intbox[1]), (intbox[0]+text_width-1, intbox[1]+text_height-1), color, cv2.FILLED)
-        # cv2.putText(im, id_text, (intbox[0], intbox[1]+text_height-1), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), lineType=cv2.LINE_AA,
-        #             thickness=text_thickness)
+        # draw bboxes
+        color = get_color(abs(obj_id))
+        cv2.rectangle(im, intbox[0:2], intbox[2:4], color=color, thickness=line_thickness)
+        cv2.rectangle(im, (intbox[0], intbox[1]), (intbox[0]+text_width-1, intbox[1]+text_height-1), color, cv2.FILLED)
+        cv2.putText(im, id_text, (intbox[0], intbox[1]+text_height-1), cv2.FONT_HERSHEY_DUPLEX, 0.8, (255, 255, 255), lineType=cv2.LINE_AA,
+                    thickness=text_thickness)
 
     # show number 
     if horizontal_True_vertical_False:
