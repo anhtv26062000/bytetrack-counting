@@ -84,7 +84,7 @@ def make_parser():
         help="Whether your model uses p6 in FPN/PAN.",
     )
     # tracking args
-    parser.add_argument("--skip_frames", type=int, default=1, help="number frames for skipping")
+    parser.add_argument("--skip_frames", type=int, default=15, help="number frames for skipping")
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
     parser.add_argument("--match_thresh", type=float, default=0.83, help="matching threshold for tracking")
@@ -258,12 +258,12 @@ def mot(predictor, args):
                         previous_ids.append(pre_tid)
                     else:
                         print("**************ALERT FOR TO ANH NOW*****************")
-            else:
-                if (output_bboxs.qsize() < 1):
-                    output_bboxs.put((online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps))
-                # print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
-                # output_bboxs.put(None)
-                # online_im = img_info['raw_img']
+            # else:
+            #     # if (output_bboxs.qsize() < 1):
+            #     #     output_bboxs.put((online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps))
+            #     # print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
+            #     output_bboxs.put(None)
+            #     # online_im = img_info['raw_img']
 
             # calculate number of frame per "int(skip_frames)" seconds
             fps = args.skip_frames / (time.time() - start_time)
