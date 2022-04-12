@@ -47,8 +47,8 @@ def make_parser():
         "-i",
         "--input",
         type=str,
-        # default=1,
-        default='samples/u_frontcam_cuted_853x480.mp4',
+        default=-1,
+        # default='samples/u_frontcam_cuted_853x480.mp4',
         help="Path to your input image.",
     )
     parser.add_argument(
@@ -128,46 +128,51 @@ class Predictor(object):
         return dets[:, :-1], img_info
 
 def playback():
+    win_name = "output"
+    cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)    # Create window with freedom of dimensions
     global input_f_playback
     global output_bboxs
     bk_bboxes = None
     no_bb_count = 0
     global playing
     print('@@ Start Playback input_f_playback: ', input_f_playback.qsize())
-    while playing.value == 1 or not input_f_playback.empty():
-        frame = input_f_playback.get()
-        # print('@@ output_bboxs.qsize(): ', output_bboxs.qsize())
-        if (output_bboxs.qsize() > 0):
-            output_bbox = output_bboxs.get()
-            if (output_bbox != None):
-                online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps = output_bboxs.get()
-                bk_bboxes = (online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
-                print('@@ output_bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
-                frame = plot_tracking(
-                    frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)  
-        else:
-            no_bb_count += 1
-            if ( no_bb_count < 7 and bk_bboxes is not None):
-                online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps = bk_bboxes
-                print('@@ output_bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
-                frame = plot_tracking(
-                    frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
+    try:
+        while playing.value or not input_f_playback.empty():
+            frame = input_f_playback.get()
+            # print('@@ output_bboxs.qsize(): ', output_bboxs.qsize())
+            if (output_bboxs.qsize() > 0):
+                output_bbox = output_bboxs.get()
+                if (output_bbox != None):
+                    online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps = output_bbox
+                    bk_bboxes = (online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
+                    # print('@@ output_bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
+                    frame = plot_tracking(
+                        frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)  
             else:
-                bk_bboxes = None
-                no_bb_count = 0  
-    
-        cv2.imshow("Video", frame)
+                no_bb_count += 1
+                if ( no_bb_count < 300 and bk_bboxes is not None):
+                    online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps = bk_bboxes
+                    # print('@@ output_bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
+                    frame = plot_tracking(
+                        frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro, fps)
+                else:
+                    bk_bboxes = None
+                    no_bb_count = 0  
         
-        ch = cv2.waitKey(1)
-        if ch == 27 or ch == ord("q") or ch == ord("Q"):
-            break
-    cv2.destroyAllWindows()
+            cv2.imshow(win_name, frame)
+            cv2.resizeWindow(win_name, 960, 540)
+            
+            # Press Q to stop!
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        playing.value = 0
+        cv2.destroyAllWindows()
+    except Exception as e:
+        raise e  
 
 def mot(predictor, args):
     print('@@ Start MOT processing')
-    # cap = cv2.VideoCapture(args.input)
-    # # width = cap.get(cv2.CAP_PROP_FRAME_WIDTH)  # float
-    # # height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)  # float
+   
     width = 800
     height = 450
     line = [(0, int(height/15*7)), (int(width-1), int(height/15*4))]
@@ -175,7 +180,7 @@ def mot(predictor, args):
     tracker = BYTETracker(args, frame_rate=30)
 
     weights = "./yolov5face/models/yolov5s-face.pt"
-    # # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     device = "cpu"
     img_size = 320
     model = attempt_load(weights, map_location=device)
@@ -196,13 +201,9 @@ def mot(predictor, args):
     global input_f_mot
 
     while not input_f_mot.empty():
-        print('@@ input_f_mot: ', input_f_mot.qsize())
+        # print('@@ input_f_mot: ', input_f_mot.qsize())
         start_time = time.time()
         frame = input_f_mot.get()
-        # image = Image.fromarray(frame)
-
-        # resize frame to enhance processing speed (interpolation NEAREST is the fastest in cv2 interpolation)
-        # frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
 
         # YOLOv5 copy original image
         img0 = copy.deepcopy(frame)
@@ -227,10 +228,11 @@ def mot(predictor, args):
                         online_scores.append(t.score)
                     else:
                         print("**************ALERT FOR TO ANH NOW*****************")
-                # results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
                 # calculate number of deteting and tracking frame per second 
                 fps_process = 1 / (time.time() - start_time)
                 print('@@ fps_process: ', fps_process)
+                fps = args.skip_frames / (time.time() - start_time)
+                # print('@@ skip_frames fps: ', fps)
 
                 dif = list(set(online_ids).symmetric_difference(set(previous_ids)))
                 if len(dif) > 0:
@@ -241,7 +243,7 @@ def mot(predictor, args):
                 global output_bboxs
                 if (output_bboxs.qsize() <= 1):
                     output_bboxs.put((online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps))
-                    print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
+                    # print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
                 # online_im = plot_tracking(
                 #     img_info['raw_img'], online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)
 
@@ -257,8 +259,11 @@ def mot(predictor, args):
                     else:
                         print("**************ALERT FOR TO ANH NOW*****************")
             else:
+                if (output_bboxs.qsize() < 1):
+                    output_bboxs.put((online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps))
+                # print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
+                # output_bboxs.put(None)
                 # online_im = img_info['raw_img']
-                output_bboxs.put(None)
 
             # calculate number of frame per "int(skip_frames)" seconds
             fps = args.skip_frames / (time.time() - start_time)
@@ -266,71 +271,58 @@ def mot(predictor, args):
         else:
             if (output_bboxs.qsize() <= 1):
                 output_bboxs.put((online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps))
-                print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
+                # print('@@ Put out bboxs: ', online_tlwhs, previous_tlwhs, online_ids, line, fps_process, fps)
 
             # online_im = plot_tracking(
             #         frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)   
     
 
-def imageflow_demo(args):
+def run_video_capture(args):
     cap = cv2.VideoCapture(args.input)
-    frame_id = 0
+    get_fps = cap.get(cv2.CAP_PROP_FPS)
+    print('@@ video fps: ', get_fps)
     # set_fps = cap.set(cv2.CAP_PROP_FPS, int(30))
     # print('@@ set_fps ', set_fps)
+   
     while True:
         ret_val, frame = cap.read()
-        # time.sleep(10)
+        
         if ret_val:
+            width = 800
+            height = 450
+            frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
+
             # Put frame to MOT processing
             global input_f_mot
-            if (input_f_mot.qsize() <= 1):
+            if (input_f_mot.qsize() < 1):
                 input_f_mot.put(frame)
             
             # Put frame to Playback processing
             global input_f_playback
-            if (input_f_playback.qsize() <= 1):
+            if (input_f_playback.qsize() < 1):
                 input_f_playback.put(frame)
         else:
             break
-        frame_id += 1
-    return frame_id
+    cap.release()
+    cv2.destroyAllWindows()
     
-    # frame_rate = 5
-    # prev = 0
-    # while True:
-    #     time_elapsed = time.time() - prev
-    #     ret_val, frame = cap.read()
-        
-    #     if ret_val:
-    #         if time_elapsed > 1./frame_rate:
-    #             prev = time.time()
-    #             # Put frame to MOT processing
-    #             global input_f_mot
-    #             if (input_f_mot.qsize() <= 1):
-    #                 input_f_mot.put(frame)
-                
-    #             # Put frame to Playback processing
-    #             global input_f_playback
-    #             if (input_f_playback.qsize() <= 1):
-    #                 input_f_playback.put(frame)
-    #     else:
-    #         break
-    #     frame_id += 1
 
 if __name__ == '__main__':
     # Start Playback Processing
     p1 = Process(target=playback, args=())
     p1.start()
-    # p1.join()
-
-    args = make_parser().parse_args()
-    predictor = Predictor(args)
 
     # Start MOT Processing
+    args = make_parser().parse_args()
+    predictor = Predictor(args)
     p2 = Process(target=mot, args=(predictor, args))
     p2.start()
 
-    stime = time.time()
-    num_frames = imageflow_demo(args)
-    fps = num_frames/(time.time()-stime)
-    logger.info(f"Average FPS in this video: {fps}")
+    # run capture video
+    run_video_capture(args)
+
+    # time.sleep(180)
+    # if (playing.value == 0):
+        # cv2.destroyAllWindows()
+        # p1.join()
+        # p2.join()
