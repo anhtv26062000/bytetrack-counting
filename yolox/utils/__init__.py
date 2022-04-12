@@ -3,6 +3,7 @@
 # Copyright (c) 2014-2021 Megvii Inc. All rights reserved.
 
 from .allreduce_norm import *
+from .box_utils_numpy import *
 from .boxes import *
 from .checkpoint import load_ckpt, save_checkpoint
 from .demo_utils import *
