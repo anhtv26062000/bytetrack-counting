@@ -26,7 +26,8 @@ def make_parser():
         "-i",
         "--input",
         type=str,
-        default='./videos/palace.mp4',
+        # default='samples/test4_unicam.mp4',
+        default=-1,
         help="Path to your input image.",
     )
     parser.add_argument(
@@ -116,13 +117,13 @@ def imageflow_demo(predictor, args):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    save_folder = args.output_dir
-    os.makedirs(save_folder, exist_ok=True)
-    save_path = os.path.join(save_folder, args.input.split("/")[-1])
-    logger.info(f"video save_path is {save_path}")
-    vid_writer = cv2.VideoWriter(
-        save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
-    )
+    # save_folder = args.output_dir
+    # os.makedirs(save_folder, exist_ok=True)
+    # save_path = os.path.join(save_folder, args.input.split("/")[-1])
+    # logger.info(f"video save_path is {save_path}")
+    # vid_writer = cv2.VideoWriter(
+    #     save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
+    # )
 
     tracker = BYTETracker(args, frame_rate=30)
 
@@ -140,16 +141,18 @@ def imageflow_demo(predictor, args):
     
     while True:
         # print("\nFrame ID: ", frame_id)
-        start_time = time.time()
         ret_val, frame = cap.read()
 
         if ret_val:
+            start_time = time.time()
             # resize frame to enhance processing speed (interpolation NEAREST is the fastest in cv2 interpolation)
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
 
             # Skip frames
             if frame_id % args.skip_frames == 0:
+                t2 = time.time()
                 outputs, img_info = predictor.inference(frame)
+                print('@@ t2: ', time.time() - t2)
                 if outputs is not None:
                     online_targets, previous_targets = tracker.update(outputs, [img_info['height'], img_info['width']], [img_info['height'], img_info['width']])
                     online_tlwhs = []
@@ -169,6 +172,7 @@ def imageflow_demo(predictor, args):
 
                     # calculate number of deteting and tracking frame per second 
                     fps_process = 1 / (time.time() - start_time)
+                    print('@@ fps_process: ', fps_process)
 
                     dif = list(set(online_ids).symmetric_difference(set(previous_ids)))
                     if len(dif) > 0:
@@ -203,7 +207,7 @@ def imageflow_demo(predictor, args):
             cv2.imshow("Video", online_im)
             
             # save video stream with format mp4
-            vid_writer.write(online_im)
+            # vid_writer.write(online_im)
             
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):

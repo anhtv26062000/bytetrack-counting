@@ -16,7 +16,8 @@ def get_color(idx):
     return color
 
 
-def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps_pro=0, fps=0., ids2=None, no_sum= False):
+def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps_pro=0.0, fps=0.0, ids2=None, no_sum= False):
+    # print('fps pro: ',  fps_pro)
     im = np.ascontiguousarray(np.copy(image))
     im_h, im_w = im.shape[:2]
 
@@ -36,7 +37,7 @@ def plot_tracking(image, tlwhs, previous_tlwhs, obj_ids, line, scores=None,  fps
     horizontal_True_vertical_False = assess_horizontal_or_vertical(line)  
     
     # show FPS, avgFPS and number of detected people
-    cv2.putText(im, 'FPS: %.2f - avgFPS: %.2f' % (fps_pro, fps),
+    cv2.putText(im, 'FPS: %.2f - avgFPS: %.0f' % (fps_pro, fps),
                 (int(im_w/40), int(im_h/10)), cv2.FONT_HERSHEY_COMPLEX, text_scale, (0, 0, 255), lineType=cv2.LINE_AA, thickness=text_thickness)
 
     # draw line counting

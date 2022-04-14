@@ -159,7 +159,7 @@ def imageflow_demo(predictor, args):
     tracker = BYTETracker(args, frame_rate=30)
 
     # =============ultra light weight face detection load model=========================
-    onnx_path = "./pretrained/onnx/version-RFB-320.onnx"
+    onnx_path = "./pretrained/version-RFB-320.onnx"
 
     threshold = 0.8
 
