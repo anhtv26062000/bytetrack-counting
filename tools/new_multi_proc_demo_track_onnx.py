@@ -7,7 +7,8 @@ import copy
 import onnx
 import onnxruntime
 import numpy as np
-from utils.CountsPerSec import CountsPerSec
+
+from utils.counts_per_sec import CountsPerSec
 
 # hide onnxruntime warning 
 onnxruntime.set_default_logger_severity(3)
@@ -49,8 +50,8 @@ def make_parser():
         "-i",
         "--input",
         type=str,
-        default=-1,
-        # default='samples/test4_unicam.mp4',
+        # default=-1,
+        default='samples/test4_unicam.mp4',
         help="Path to your input image.",
     )
     parser.add_argument(
