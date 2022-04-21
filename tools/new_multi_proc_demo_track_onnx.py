@@ -246,8 +246,8 @@ def run_video_capture(args):
         if ret_val:
             # if time_elapsed > 1./frame_rate:
                 # prev = time.time()
-            width = 800
-            height = 450
+            width = 640
+            height = 360
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
 
             # Put frame to MOT processing
