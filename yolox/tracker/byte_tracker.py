@@ -6,6 +6,10 @@ import copy
 import torch
 import torch.nn.functional as F
 
+# ignore warning 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+
 from .kalman_filter import KalmanFilter
 from yolox.tracker import matching
 from .basetrack import BaseTrack, TrackState
