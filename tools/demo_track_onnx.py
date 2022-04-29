@@ -5,67 +5,30 @@ import cv2
 import time
 import onnxruntime
 import numpy as np
+
+# hide onnxruntime warning 
+onnxruntime.set_default_logger_severity(3)
+
 from loguru import logger
 
 from yolox.data.data_augment import preproc as preprocess
-from yolox.utils import mkdir, multiclass_nms, demo_postprocess
-from yolox.utils.visualize import plot_tracking
+from yolox.utils import multiclass_nms, demo_postprocess, plot_tracking
 from yolox.tracker.byte_tracker import BYTETracker
-from yolox.tracking_utils.timer import Timer
 
 def make_parser():
     parser = argparse.ArgumentParser("onnxruntime inference sample")
-    parser.add_argument(
-        "-m",
-        "--model",
-        type=str,
-        default="./pretrained/bytetrack_tiny.onnx",
-        help="Input your onnx model.",
-    )
-    parser.add_argument(
-        "-i",
-        "--input",
-        type=str,
-        default='./videos/palace.mp4',
-        help="Path to your input image.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output_dir",
-        type=str,
-        default='./YOLOX_outputs/onnx/',
-        help="Path to your output directory.",
-    )
-    parser.add_argument(
-        "-s",
-        "--score_thr",
-        type=float,
-        default=0.01,
-        help="Score threshold to filter the result.",
-    )
-    parser.add_argument(
-        "-n",
-        "--nms_thr",
-        type=float,
-        default=0.6,
-        help="NMS threshould.",
-    )
-    parser.add_argument(
-        "--input_shape",
-        type=str,
-        default="608,1088",
-        help="Specify an input shape for inference.",
-    )
-    parser.add_argument(
-        "--with_p6",
-        action="store_true",
-        help="Whether your model uses p6 in FPN/PAN.",
-    )
+    parser.add_argument("-m", "--model", type=str, default="./pretrained/bytetrack_nano.onnx", help="Input your onnx model.")
+    parser.add_argument("-i", "--input", type=str, default='./videos/palace.mp4', help="Path to your input image.")
+    parser.add_argument("-o", "--output_dir",type=str, default='./YOLOX_outputs/onnx/', help="Path to your output directory.")
+    parser.add_argument("-s", "--score_thr", type=float, default=0.01, help="Score threshold to filter the result.")
+    parser.add_argument("-n", "--nms_thr", type=float, default=0.6, help="NMS threshould.")
+    parser.add_argument("--input_shape", type=str, default="608,1088", help="Specify an input shape for inference.")
+    parser.add_argument("--with_p6", action="store_true", help="Whether your model uses p6 in FPN/PAN.")
     # tracking args
-    parser.add_argument("--skip_frames", type=int, default=15, help="number frames for skipping")
+    parser.add_argument("--skip_frames", type=int, default=1, help="number frames for skipping")
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
-    parser.add_argument("--match_thresh", type=float, default=0.83, help="matching threshold for tracking")
+    parser.add_argument("--match_thresh", type=float, default=0.85, help="matching threshold for tracking")
     parser.add_argument('--min-box-area', type=float, default=10, help='filter out tiny boxes')
     parser.add_argument("--mot20", dest="mot20", default=False, action="store_true", help="test mot20.")
     return parser
@@ -137,6 +100,10 @@ def imageflow_demo(predictor, args):
     online_scores = []
     online_targets = []
     previous_targets = []
+
+    sumtime = 0
+    min_time = 9999999999
+    max_time = 0
     
     while True:
         # print("\nFrame ID: ", frame_id)
@@ -144,12 +111,18 @@ def imageflow_demo(predictor, args):
         ret_val, frame = cap.read()
 
         if ret_val:
+            t1 = time.time()
             # resize frame to enhance processing speed (interpolation NEAREST is the fastest in cv2 interpolation)
             frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_NEAREST)
+            t2 = time.time()
 
             # Skip frames
             if frame_id % args.skip_frames == 0:
                 outputs, img_info = predictor.inference(frame)
+                t3 = time.time()
+                sumtime += (t3 - t2) 
+                min_time = (t3 - t2) if (t3 - t2) < min_time else min_time
+                max_time = (t3 - t2) if (t3 - t2) > max_time else max_time
                 if outputs is not None:
                     online_targets, previous_targets = tracker.update(outputs, [img_info['height'], img_info['width']], [img_info['height'], img_info['width']])
                     online_tlwhs = []
@@ -163,11 +136,9 @@ def imageflow_demo(predictor, args):
                             online_tlwhs.append(tlwh)
                             online_ids.append(tid)
                             online_scores.append(t.score)
-                        else:
-                            print("**************ALERT FOR TO ANH NOW*****************")
                     # results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
 
-                    # calculate number of deteting and tracking frame per second 
+                    # calculate number of processing frame per second 
                     fps_process = 1 / (time.time() - start_time)
 
                     dif = list(set(online_ids).symmetric_difference(set(previous_ids)))
@@ -175,6 +146,7 @@ def imageflow_demo(predictor, args):
                         for x in reversed(dif):
                             del previous_tlwhs[previous_ids.index(x)]
                             del previous_ids[previous_ids.index(x)]
+                    t4 = time.time()
                     online_im = plot_tracking(
                         img_info['raw_img'], online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)
 
@@ -187,21 +159,21 @@ def imageflow_demo(predictor, args):
                         if pre_tlwh[2] * pre_tlwh[3] > args.min_box_area and not vertical:
                             previous_tlwhs.append(pre_tlwh)
                             previous_ids.append(pre_tid)
-                        else:
-                            print("**************ALERT FOR TO ANH NOW*****************")
+                    t5 = time.time()
                 else:
                     online_im = img_info['raw_img']
 
+
+                print(f'Speed: %.5fs resize_MOT, %.5fs body-det, %.5fs tracking, %.5fs store-state' % (t2-t1, t3-t2, t4-t3, t5-t4))
                 # calculate number of frame per "int(skip_frames)" seconds
                 fps = args.skip_frames / (time.time() - start_time)
-
+            
             else:
                 online_im = plot_tracking(
-                        frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)   
-
+                        frame, online_tlwhs, previous_tlwhs, online_ids, line, fps_pro=fps_process, fps=fps)
+            
             # show stream window
             cv2.imshow("Video", online_im)
-            
             # save video stream with format mp4
             vid_writer.write(online_im)
             
@@ -210,6 +182,7 @@ def imageflow_demo(predictor, args):
                 break
 
         else:
+            print("Min_time:", min_time, "Max_time:", max_time, "Avg_time:", sumtime/frame_id)
             break
         frame_id += 1
     return frame_id
