@@ -23,7 +23,7 @@ def make_parser():
         "-m",
         "--model",
         type=str,
-        default="./pretrained/bytetrack_tiny.onnx",
+        default="./pretrained/bytetrack_nano.onnx",
         help="Input your onnx model.",
     )
     parser.add_argument(
@@ -158,7 +158,7 @@ def imageflow_demo(predictor, args):
 
     tracker = BYTETracker(args, frame_rate=30)
 
-    # =============ultra light weight face detection load model=========================
+    # =============Ultra light-weight face detection load model=========================
     onnx_path = "./pretrained/onnx/version-RFB-320.onnx"
 
     threshold = 0.8
@@ -221,8 +221,6 @@ def imageflow_demo(predictor, args):
                             online_tlwhs.append(tlwh)
                             online_ids.append(tid)
                             online_scores.append(t.score)
-                        else:
-                            print("**************ALERT FOR TO ANH NOW*****************")
                     # results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
 
                     # calculate number of processing frame per second 
@@ -246,8 +244,6 @@ def imageflow_demo(predictor, args):
                         if pre_tlwh[2] * pre_tlwh[3] > args.min_box_area and not vertical:
                             previous_tlwhs.append(pre_tlwh)
                             previous_ids.append(pre_tid)
-                        else:
-                            print("**************ALERT FOR TO ANH NOW*****************")
                     t6 = time.time()
                 else:
                     online_im = img_info['raw_img']
@@ -256,11 +252,11 @@ def imageflow_demo(predictor, args):
                 confidences, boxes = ort_session.run(None, {input_name: img_face})
                 boxes, labels, probs = predict(width, height, confidences, boxes, threshold)
                 t7 = time.time()
-                print(f'Speed: %.5fms resize_MOT, %.5fms pre-process face-det, %.5fms body-det, %.5fms tracking, %.5fms store-state, %.5fms face-det' % (t2-t1, t3-t2, t4-t3, t5-t4, t6-t5, t7-t6))
                 for i in range(boxes.shape[0]):
                     box = boxes[i, :]
                     cv2.rectangle(online_im, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 4)
 
+                print(f'Speed: %.5fms resize_MOT, %.5fms pre-process face-det, %.5fms body-det, %.5fms tracking, %.5fms store-state, %.5fms face-det' % (t2-t1, t3-t2, t4-t3, t5-t4, t6-t5, t7-t6))
                 # calculate number of frame per "int(skip_frames)" seconds
                 fps = args.skip_frames / (time.time() - start_time)
             
