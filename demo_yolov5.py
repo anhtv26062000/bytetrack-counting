@@ -78,7 +78,7 @@ def run(
         hide_conf=False,  # hide confidences
         half=False,  # use FP16 half-precision inference
         dnn=False,  # use OpenCV DNN for ONNX inference
-        skip_frames=5,
+        skip_frames=12,
         track_thresh=0.5,
         track_buffer=30,
         match_thresh=0.85,
@@ -328,7 +328,7 @@ def parse_opt():
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
     # tracking args
-    parser.add_argument("--skip_frames", type=int, default=5, help="number frames for skipping")
+    parser.add_argument("--skip_frames", type=int, default=12, help="number frames for skipping")
     parser.add_argument("--track_thresh", type=float, default=0.5, help="tracking confidence threshold")
     parser.add_argument("--track_buffer", type=int, default=30, help="the frames for keep lost tracks")
     parser.add_argument("--match_thresh", type=float, default=0.8, help="matching threshold for tracking")
