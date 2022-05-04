@@ -19,15 +19,15 @@ def make_parser():
         "-m",
         "--model",
         type=str,
-        default="./pretrained/bytetrack_tiny.onnx",
+        default="./pretrained/bytetrack_nano.onnx",
         help="Input your onnx model.",
     )
     parser.add_argument(
         "-i",
         "--input",
         type=str,
-        # default='samples/test4_unicam.mp4',
-        default=-1,
+        default='samples/cutted_50s_test4_unicam.mp4',
+        # default=-1,
         help="Path to your input image.",
     )
     parser.add_argument(
@@ -117,13 +117,13 @@ def imageflow_demo(predictor, args):
 
     fps = cap.get(cv2.CAP_PROP_FPS)
 
-    # save_folder = args.output_dir
-    # os.makedirs(save_folder, exist_ok=True)
-    # save_path = os.path.join(save_folder, args.input.split("/")[-1])
-    # logger.info(f"video save_path is {save_path}")
-    # vid_writer = cv2.VideoWriter(
-    #     save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
-    # )
+    save_folder = args.output_dir
+    os.makedirs(save_folder, exist_ok=True)
+    save_path = os.path.join(save_folder, args.input.split("/")[-1])
+    logger.info(f"video save_path is {save_path}")
+    vid_writer = cv2.VideoWriter(
+        save_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (int(width), int(height))
+    )
 
     tracker = BYTETracker(args, frame_rate=30)
 
@@ -207,7 +207,7 @@ def imageflow_demo(predictor, args):
             cv2.imshow("Video", online_im)
             
             # save video stream with format mp4
-            # vid_writer.write(online_im)
+            vid_writer.write(online_im)
             
             ch = cv2.waitKey(1)
             if ch == 27 or ch == ord("q") or ch == ord("Q"):
